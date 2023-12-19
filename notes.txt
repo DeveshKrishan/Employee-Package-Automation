@@ -1,0 +1,8 @@
+﻿create automation so don't have to manually add things
+
+equipment inventory
+
+track all the equipment
+
+quantity of 1 in column
+skip that
