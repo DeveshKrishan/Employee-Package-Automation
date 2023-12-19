@@ -9,7 +9,7 @@ function main() {
 
 function makeFolder(){
     /** 
-   * Creates a folder containing the generated reports for each employee.
+   * Creates a folder that will contain the generated reports for each employee.
    */
   // https://stackoverflow.com/questions/26118809/how-to-create-a-folder-if-it-doesnt-exist/38024062#38024062
   const EMPLOYEE_FOLDER_NAME = "Employee Packages";
@@ -31,12 +31,15 @@ function makeFolder(){
 function findQuantityFromNotes(note){
   /** 
    * If there is text containing "Quantity" in the Notes Column, it parses through to find the amount.
+   * For example, finding "Quantity (x2)" will result in "2".
    */  
-  // Note: I did not account for TESTCASE where a column can have "Quantity (x2) Blah Blah". 
   if (note.includes("Quantity")){
-    let note_index = note.indexOf("Quantity");
-    if (note_index != -1){
-      note = note.slice(note_index + 9)
+    let noteIndex = note.indexOf("Quantity");
+    if (noteIndex != -1){
+      note = note.slice(noteIndex + 9)
+      let parenthesisStartIndex = note.indexOf("(");
+      let parenthesisEndIndex = note.indexOf(")");
+      note = note.slice(parenthesisStartIndex, parenthesisEndIndex);
       note = note.replace("(", "");
       note = note.replace(")", "");
       note = note.replace("x", "");
@@ -110,17 +113,17 @@ function setReturnTableTitleRowHeight(ss, employeeReturnRow){
 
 function createFile(employeeMap, dataToEmployee, folder_location){
   /** 
-   * Creates a folder containing the generated reports for each employee.
+   * Creates a file for each employee setting up formatting and values.
    */
   const file_array = [];
   for (const [employee, hub] of employeeMap) {
     // https://stackoverflow.com/questions/43566567/add-file-to-an-existing-folder-if-file-doesnt-exist-in-that-folder\
     var file = DriveApp.getFileById(PropertiesService.getScriptProperties().getProperty('TEMPLATE_FILE_ID'))
 
-    let name = `[Draft-Automation] ${employee} | ${hub} Equipment Inventory`;
+    let name = `[Draft-Automation] ${employee} | ${hub} Equipment Inventory`; // names the file for each employee
     if (!folder_location.getFilesByName(name).hasNext()) { //if this file does not exist
-      let file_name = file.makeCopy(name, folder_location);   
-      let documentId = file_name.getId();
+      let fileName = file.makeCopy(name, folder_location);   
+      let documentId = fileName.getId();
 
       var ss = SpreadsheetApp.openById(documentId).getSheets()[0];
       let employeeSheet = ss.getDataRange().getValues(); // 2D Array of Values
@@ -133,13 +136,9 @@ function createFile(employeeMap, dataToEmployee, folder_location){
       let employeeSum = 0;
 
       for (let i = 0; i < arr.length;i++){
-        let item = `${arr[i][0]} ${arr[i][2]} ${arr[i][3]}`;
-        let quantity = 1;
-        let value = arr[i][5];
+        let item = `${arr[i][0]} ${arr[i][2]} ${arr[i][3]}`, quantity = 1, value = arr[i][5];
         employeeSum += (parseInt(value));
-        let serial_num = arr[i][1];
-        let date_install = arr[i][4];
-        let note = arr[i][7];
+        let serial_num = arr[i][1], date_install = arr[i][4], note = arr[i][7];
 
         let quantityFromNotes = findQuantityFromNotes(note);
         
@@ -147,9 +146,15 @@ function createFile(employeeMap, dataToEmployee, folder_location){
           quantity = quantityFromNotes;
         }
 
-        if (date_install != ""){
-          date_install = date_install.toLocaleDateString();
+        try{
+          if (date_install != ""){
+            date_install = date_install.toLocaleDateString();
+          }
         }
+        catch(e){
+
+        }
+
 
         employeeSheet[itemRowStart][1] = item;
         employeeSheet[itemRowStart][2] = quantity;
@@ -179,11 +184,10 @@ function createFile(employeeMap, dataToEmployee, folder_location){
 
       // https://developers.google.com/apps-script/reference/spreadsheet/range#copyformattorangesheet,-column,-columnend,-row,-rowend
       // https://www.sppatra.com/2022/08/how-to-copy-range-with-and-without.html
+      // set up return table by copying format of loan table
       let employeeLoanRange = ss.getRange(4, 2, 2, 5);
       employeeLoanRange.copyFormatToRange(ss, 2, 7, employeeReturnRow, employeeReturnRow + 2);
-
       setReturnTableTitleRowHeight(ss, employeeReturnRow)
-
       employeeSheet = ss.getDataRange().getValues(); // 2D Array of Values
 
       let returnRowCounter = employeeReturnRow + 1;
@@ -205,18 +209,21 @@ function createFile(employeeMap, dataToEmployee, folder_location){
           employeeSheet[returnRowCounter][5] = returnDate.toLocaleDateString();
           returnRowCounter++;
         }
-        
-
       }
 
-      returnTable = ss.getRange(employeeReturnRow + 2, 2, returnRowCounter - employeeReturnRow - 1, 5);
-      formatReturnTable(returnTable, returnRowCounter, employeeReturnRow);
+      // covers case when there is 0 rows for return table
+      try{
+        returnTable = ss.getRange(employeeReturnRow + 2, 2, returnRowCounter - employeeReturnRow - 1, 5);
+        formatReturnTable(returnTable, returnRowCounter, employeeReturnRow);
+      }
+      catch(e){
+      }
 
       ss.getRange(employeeReturnRow +2, 4, itemRowStart - 5 + 1, 1).setNumberFormat('_("$"* #,##0.00_);_("$"* \\(#,##0.00\\);_("$"* "-"??_);_(@_)');
 
       range.setValues(employeeSheet)
 
-      file_array.push(file_name);
+      file_array.push(fileName);
     }
   }
   return file_array
